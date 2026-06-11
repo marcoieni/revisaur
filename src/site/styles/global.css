@@ -113,6 +113,7 @@ a {
 .topbar-tooltip,
 .pr-number::after,
 .review-status-indicator::after,
+.review-date::after,
 .copy-location-button::after {
     position: absolute;
     z-index: 20;
@@ -142,6 +143,7 @@ a {
 .topbar-controls .has-tooltip::before,
 .pr-number::before,
 .review-status-indicator::before,
+.review-date::before,
 .copy-location-button::before {
     position: absolute;
     z-index: 20;
@@ -653,6 +655,11 @@ h1 {
     align-items: center;
 }
 
+.review-date {
+    position: relative;
+    cursor: help;
+}
+
 .addressed-toggle {
     display: inline-grid;
     grid-template-columns: 16px;
@@ -846,6 +853,7 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
 
 .pr-number::after,
 .review-status-indicator::after,
+.review-date::after,
 .copy-location-button::after {
     right: 0;
     top: calc(100% + 8px);
@@ -863,8 +871,13 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
     white-space: normal;
 }
 
+.review-date::after {
+    white-space: pre-line;
+}
+
 .pr-number::before,
 .review-status-indicator::before,
+.review-date::before,
 .copy-location-button::before {
     top: calc(100% + 3px);
     border-bottom-color: #171717;
@@ -879,6 +892,10 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
     right: 1px;
 }
 
+.review-date::before {
+    right: 8px;
+}
+
 .copy-location-button::before {
     right: 8px;
 }
@@ -891,6 +908,10 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
 .review-status-indicator:hover::before,
 .review-status-indicator:focus-visible::after,
 .review-status-indicator:focus-visible::before,
+.review-date:hover::after,
+.review-date:hover::before,
+.review-date:focus-visible::after,
+.review-date:focus-visible::before,
 .copy-location-button:hover::after,
 .copy-location-button:hover::before,
 .copy-location-button:focus-visible::after,

@@ -8,7 +8,13 @@ import { loadConfig } from "../config/loadConfig.js";
 import { providerFor } from "../providers/index.js";
 import { reviewerFor } from "../reviewers/index.js";
 import { emptyState, isReusableReview, loadState, reviewKey, saveState } from "../state/reviewState.js";
-import type { PullRequestReview, RepositoryConfig, RevisaurConfig } from "../types/revisaur.js";
+import type {
+    PullRequestReview,
+    RepositoryConfig,
+    ReviewExecutionMetadata,
+    ReviewerConfig,
+    RevisaurConfig,
+} from "../types/revisaur.js";
 
 type SiteRepository = Pick<RepositoryConfig, "id" | "name" | "owner" | "provider" | "repo" | "url">;
 
@@ -61,6 +67,7 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
     const statePath = path.join(dataDir, "state.json");
     const state = await loadState(statePath);
     const reviewer = reviewerFor(config.reviewer);
+    const reviewerMetadata = reviewExecutionMetadata(config.reviewer);
     // Tracks the current run's site payload while state.reviews remains the full cache.
     const reviewKeys: string[] = [];
     let cachedReviews = 0;
@@ -108,6 +115,7 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
                     repoId: repo.id,
                     pullRequest,
                     status: "reviewed",
+                    reviewer: reviewerMetadata,
                     reviewedCommit: pullRequest.headSha,
                     reviewedAt,
                     summary: result.summary,
@@ -125,6 +133,7 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
                     repoId: repo.id,
                     pullRequest,
                     status: "failed",
+                    reviewer: reviewerMetadata,
                     reviewedCommit: pullRequest.headSha,
                     reviewedAt,
                     summary: "Review failed.",
@@ -156,6 +165,14 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
     if (!skipBuild) {
         await buildSite(config.dataDir, outputDir, workspace);
     }
+}
+
+function reviewExecutionMetadata(config: ReviewerConfig): ReviewExecutionMetadata {
+    return {
+        harness: config.command === config.kind ? config.kind : `${config.kind} (${config.command})`,
+        model: config.model ?? "default",
+        reasoningLevel: config.reasoningLevel ?? "default",
+    };
 }
 
 async function demo(
@@ -266,6 +283,7 @@ function demoRepositories(): RepositoryConfig[] {
 
 function demoReviews(): PullRequestReview[] {
     const now = Date.now();
+    const reviewer = demoReviewExecutionMetadata();
     return [
         {
             repoId: "github-octoflow-api",
@@ -283,6 +301,7 @@ function demoReviews(): PullRequestReview[] {
                 updatedAt: new Date(now - 18 * 60 * 60 * 1000).toISOString(),
             },
             status: "reviewed",
+            reviewer,
             reviewedCommit: "9f3b7c2d8a1e4f52b6c901df774aa018e8db7210",
             reviewedAt: new Date(now - 16 * 60 * 60 * 1000).toISOString(),
             summary:
@@ -355,6 +374,7 @@ index c112243..2d7e401 100644
                 updatedAt: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
             },
             status: "reviewed",
+            reviewer,
             reviewedCommit: "0d7a6c20b863a2b2e22ab986a51271940ac97d54",
             reviewedAt: new Date(now - 3 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000).toISOString(),
             summary:
@@ -411,6 +431,7 @@ index a11d501..df98215 100644
                 updatedAt: new Date(now - 7 * 60 * 60 * 1000).toISOString(),
             },
             status: "reviewed",
+            reviewer,
             reviewedCommit: "bd441671ac82ac301bb7fbfcd77c9a4d76c255e2",
             reviewedAt: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
             summary:
@@ -463,6 +484,7 @@ index 9a070a1..ac13094 100644
                 updatedAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
             },
             status: "failed",
+            reviewer,
             reviewedCommit: "a4acb7846f86b3b783f7311ea1cc06d1f50b7e81",
             reviewedAt: new Date(now - 5 * 24 * 60 * 60 * 1000 + 20 * 60 * 1000).toISOString(),
             summary: "Review failed.",
@@ -500,6 +522,7 @@ index 51ed23b..5a299ce 100644
                 updatedAt: new Date(now - 11 * 60 * 60 * 1000).toISOString(),
             },
             status: "reviewed",
+            reviewer,
             reviewedCommit: "19b6cf0d23f7a40e9c1b4d88fa75e639ad214c0f",
             reviewedAt: new Date(now - 10 * 60 * 60 * 1000).toISOString(),
             summary:
@@ -557,6 +580,7 @@ index 3c8f2a1..70b546d 100644
                 updatedAt: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
             },
             status: "reviewed",
+            reviewer,
             reviewedCommit: "f84ce159498a5021845c45fbe21f1db8b9fb11dc",
             reviewedAt: new Date(now - 4 * 24 * 60 * 60 * 1000 + 35 * 60 * 1000).toISOString(),
             summary:
@@ -594,4 +618,12 @@ index 42b8dd0..65463ef 100644
             ],
         },
     ];
+}
+
+function demoReviewExecutionMetadata(): ReviewExecutionMetadata {
+    return {
+        harness: "kiro (kiro-cli)",
+        model: "claude-opus-4.7",
+        reasoningLevel: "default",
+    };
 }

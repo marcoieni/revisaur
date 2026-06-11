@@ -64,6 +64,18 @@ function prReviewStateLabel(review: PullRequestReview): string {
   }
 }
 
+function reviewExecutionTooltip(review: PullRequestReview): string {
+  return [
+    `Model: ${review.reviewer?.model ?? "unknown"}`,
+    `Harness: ${review.reviewer?.harness ?? "unknown"}`,
+    `Reasoning level: ${review.reviewer?.reasoningLevel ?? "unknown"}`,
+  ].join("\n");
+}
+
+function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): string {
+  return `Reviewed at ${reviewedAt}. ${executionTooltip.replaceAll("\n", ". ")}`;
+}
+
 ---
 
 <main class="app-shell" style={iconStyle}>
@@ -175,6 +187,8 @@ function prReviewStateLabel(review: PullRequestReview): string {
             .map((review) => {
               const authorUrl = getUserUrl(review, review.pullRequest.author);
               const assignees = review.pullRequest.assignees ?? [];
+              const reviewedAt = new Date(review.reviewedAt).toLocaleString();
+              const executionTooltip = reviewExecutionTooltip(review);
               const reviewKey = browserReviewKey(review);
 
               return (
@@ -238,7 +252,15 @@ function prReviewStateLabel(review: PullRequestReview): string {
                         />
                       </label>
                       <ReviewIndicator review={review} />
-                      <time datetime={review.reviewedAt}>{new Date(review.reviewedAt).toLocaleString()}</time>
+                      <time
+                        class="review-date"
+                        datetime={review.reviewedAt}
+                        data-tooltip={executionTooltip}
+                        title={executionTooltip}
+                        aria-label={reviewDateAriaLabel(reviewedAt, executionTooltip)}
+                      >
+                        {reviewedAt}
+                      </time>
                     </div>
                   </header>
                   <div class="review-body">
