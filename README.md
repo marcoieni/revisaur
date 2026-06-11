@@ -86,11 +86,16 @@ name = "Astro"
 provider = "github"
 url = "https://github.com/withastro/astro"
 max_pull_requests = 5
+# Repository-level filters are unioned with global filters, not overridden.
 included_authors = ["maintainer"]
 # prompt_instructions = "Repository-specific instructions override the global prompt_instructions value."
 ```
 
-Use `included_authors` to review only pull requests opened by specific users, and `included_assignees` to review only pull requests assigned to specific users. If both are configured, a pull request matching either list is reviewed. `skipped_authors` excludes pull requests by author and takes precedence over include filters. These filters can be configured together across scopes: for example, keep `skipped_authors` global to ignore bot pull requests in every repository while setting `included_authors` on one repository to limit reviews there to specific maintainers. Repository-level user filters are merged with global user filters.
+Use `included_authors` to review only pull requests opened by specific users, and `included_assignees` to review only pull requests assigned to specific users. If both are configured, a pull request matching either list is reviewed. `skipped_authors` excludes pull requests by author and takes precedence over include filters.
+
+Global and repository-level user filters are additive, not overriding. For `included_authors`, `included_assignees`, and `skipped_authors`, Revisaur uses the union of the global values and the repository values, with duplicates removed. For example, keep `skipped_authors` global to ignore bot pull requests in every repository, and add repository-specific filters such as:
+- `skipped_authors` only for extra authors that should be skipped in that repository.
+- `included_authors` to limit reviews of that repository to specific maintainers.
 
 Use `prompt_instructions` to add reviewer guidance to the generated prompt. A repository-level value overrides the global value for that repository.
 
