@@ -18,4 +18,5 @@ name = "Astro"
 provider = "github"
 url = "https://github.com/withastro/astro"
 max_pull_requests = 5
+# Repository-level filters are unioned with global filters, not overridden.
 # prompt_instructions = "Repository-specific instructions override the global prompt_instructions value."

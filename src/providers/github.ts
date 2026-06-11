@@ -4,6 +4,15 @@ import type { PullRequestSummary, RepositoryConfig } from "../types/revisaur.js"
 
 const perPageKey = "per_page";
 const pullNumberKey = "pull_number";
+const pullRequestsPageSize = 100;
+
+type GitHubPullRequest = Awaited<ReturnType<Octokit["rest"]["pulls"]["list"]>>["data"][number];
+
+interface PullRequestFilters {
+    includedAssignees: ReadonlySet<string>;
+    includedAuthors: ReadonlySet<string>;
+    skippedAuthors: ReadonlySet<string>;
+}
 
 export class GitHubProvider implements RepositoryProvider {
     #client: Octokit;
@@ -13,18 +22,37 @@ export class GitHubProvider implements RepositoryProvider {
     }
 
     async listRecentlyUpdatedPullRequests(repo: RepositoryConfig): Promise<PullRequestSummary[]> {
-        const response = await this.#client.rest.pulls.list({
-            owner: repo.owner,
-            repo: repo.repo,
-            state: "open",
-            sort: "updated",
-            direction: "desc",
-            [perPageKey]: Math.min(repo.maxPullRequests * 3, 100),
-        });
+        const filters = pullRequestFilters(repo);
+        const pullRequests: GitHubPullRequest[] = [];
+        let page = 1;
 
-        const pullRequests = response.data
-            .filter((pr) => matchesPullRequestFilters(repo, pr))
-            .slice(0, repo.maxPullRequests);
+        while (pullRequests.length < repo.maxPullRequests) {
+            const response = await this.#client.rest.pulls.list({
+                owner: repo.owner,
+                repo: repo.repo,
+                state: "open",
+                sort: "updated",
+                direction: "desc",
+                page,
+                [perPageKey]: pullRequestsPageSize,
+            });
+
+            for (const pr of response.data) {
+                if (matchesPullRequestFilters(filters, pr)) {
+                    pullRequests.push(pr);
+                }
+
+                if (pullRequests.length >= repo.maxPullRequests) {
+                    break;
+                }
+            }
+
+            if (response.data.length < pullRequestsPageSize) {
+                break;
+            }
+
+            page += 1;
+        }
 
         return Promise.all(
             pullRequests.map(async (pr) => ({
@@ -89,31 +117,32 @@ export class GitHubProvider implements RepositoryProvider {
     }
 }
 
-function matchesPullRequestFilters(
-    repo: RepositoryConfig,
-    pr: { user?: { login?: string } | null; assignees?: { login?: string }[] | null },
-): boolean {
-    const author = (pr.user?.login ?? "").toLowerCase();
-    const skippedAuthors = new Set(repo.skippedAuthors.map((user) => user.toLowerCase()));
+function pullRequestFilters(repo: RepositoryConfig): PullRequestFilters {
+    return {
+        includedAssignees: new Set(repo.includedAssignees.map((user) => user.toLowerCase())),
+        includedAuthors: new Set(repo.includedAuthors.map((user) => user.toLowerCase())),
+        skippedAuthors: new Set(repo.skippedAuthors.map((user) => user.toLowerCase())),
+    };
+}
 
-    if (skippedAuthors.has(author)) {
+function matchesPullRequestFilters(filters: PullRequestFilters, pr: GitHubPullRequest): boolean {
+    const author = (pr.user?.login ?? "").toLowerCase();
+
+    if (filters.skippedAuthors.has(author)) {
         return false;
     }
 
-    const includedAuthors = new Set(repo.includedAuthors.map((user) => user.toLowerCase()));
-    const includedAssignees = new Set(repo.includedAssignees.map((user) => user.toLowerCase()));
-
-    if (includedAuthors.size === 0 && includedAssignees.size === 0) {
+    if (filters.includedAuthors.size === 0 && filters.includedAssignees.size === 0) {
         return true;
     }
 
-    if (includedAuthors.has(author)) {
+    if (filters.includedAuthors.has(author)) {
         return true;
     }
 
     return (
         pr.assignees
-            ?.map((assignee) => assignee.login?.toLowerCase() ?? "")
-            .some((assignee) => includedAssignees.has(assignee)) ?? false
+            ?.map((assignee) => assignee.login.toLowerCase())
+            .some((assignee) => filters.includedAssignees.has(assignee)) ?? false
     );
 }
