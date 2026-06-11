@@ -4,6 +4,16 @@ import type { PullRequestSummary, RepositoryConfig } from "../types/revisaur.js"
 
 const perPageKey = "per_page";
 const pullNumberKey = "pull_number";
+const maxPullRequestPages = 5;
+const pullRequestsPageSize = 100;
+
+type GitHubPullRequest = Awaited<ReturnType<Octokit["rest"]["pulls"]["list"]>>["data"][number];
+
+interface PullRequestFilters {
+    includedAssignees: ReadonlySet<string>;
+    includedAuthors: ReadonlySet<string>;
+    skippedAuthors: ReadonlySet<string>;
+}
 
 export class GitHubProvider implements RepositoryProvider {
     #client: Octokit;
@@ -13,20 +23,37 @@ export class GitHubProvider implements RepositoryProvider {
     }
 
     async listRecentlyUpdatedPullRequests(repo: RepositoryConfig): Promise<PullRequestSummary[]> {
-        const response = await this.#client.rest.pulls.list({
-            owner: repo.owner,
-            repo: repo.repo,
-            state: "open",
-            sort: "updated",
-            direction: "desc",
-            [perPageKey]: Math.min(repo.maxPullRequests * 3, 100),
-        });
+        const filters = pullRequestFilters(repo);
+        const pullRequests: GitHubPullRequest[] = [];
+        let page = 1;
 
-        const skipped = new Set(repo.skippedAuthors.map((author) => author.toLowerCase()));
+        while (pullRequests.length < repo.maxPullRequests && page <= maxPullRequestPages) {
+            const response = await this.#client.rest.pulls.list({
+                owner: repo.owner,
+                repo: repo.repo,
+                state: "open",
+                sort: "updated",
+                direction: "desc",
+                page,
+                [perPageKey]: pullRequestsPageSize,
+            });
 
-        const pullRequests = response.data
-            .filter((pr) => !skipped.has((pr.user?.login ?? "").toLowerCase()))
-            .slice(0, repo.maxPullRequests);
+            for (const pr of response.data) {
+                if (matchesPullRequestFilters(filters, pr)) {
+                    pullRequests.push(pr);
+                }
+
+                if (pullRequests.length >= repo.maxPullRequests) {
+                    break;
+                }
+            }
+
+            if (response.data.length < pullRequestsPageSize) {
+                break;
+            }
+
+            page += 1;
+        }
 
         return Promise.all(
             pullRequests.map(async (pr) => ({
@@ -89,4 +116,34 @@ export class GitHubProvider implements RepositoryProvider {
 
         return latestStates.includes("APPROVED") ? "approved" : "ready";
     }
+}
+
+function pullRequestFilters(repo: RepositoryConfig): PullRequestFilters {
+    return {
+        includedAssignees: new Set(repo.includedAssignees.map((user) => user.toLowerCase())),
+        includedAuthors: new Set(repo.includedAuthors.map((user) => user.toLowerCase())),
+        skippedAuthors: new Set(repo.skippedAuthors.map((user) => user.toLowerCase())),
+    };
+}
+
+function matchesPullRequestFilters(filters: PullRequestFilters, pr: GitHubPullRequest): boolean {
+    const author = (pr.user?.login ?? "").toLowerCase();
+
+    if (filters.skippedAuthors.has(author)) {
+        return false;
+    }
+
+    if (filters.includedAuthors.size === 0 && filters.includedAssignees.size === 0) {
+        return true;
+    }
+
+    if (filters.includedAuthors.has(author)) {
+        return true;
+    }
+
+    return (
+        pr.assignees
+            ?.map((assignee) => assignee.login.toLowerCase())
+            .some((assignee) => filters.includedAssignees.has(assignee)) ?? false
+    );
 }

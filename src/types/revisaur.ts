@@ -7,6 +7,8 @@ export interface RevisaurConfig {
     outputDir: string;
     dataDir: string;
     maxPullRequests: number;
+    includedAuthors: string[];
+    includedAssignees: string[];
     skippedAuthors: string[];
     promptInstructions?: string;
     reviewer: ReviewerConfig;
@@ -30,6 +32,8 @@ export interface RepositoryConfig {
     repo: string;
     branch?: string;
     maxPullRequests: number;
+    includedAuthors: string[];
+    includedAssignees: string[];
     skippedAuthors: string[];
     promptInstructions?: string;
 }

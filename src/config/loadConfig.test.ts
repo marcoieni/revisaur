@@ -23,6 +23,8 @@ repositories = [
             outputDir: "site-dist",
             dataDir: ".revisaur/data",
             maxPullRequests: 10,
+            includedAuthors: [],
+            includedAssignees: [],
             skippedAuthors: ["renovate", "renovate[bot]", "dependabot", "dependabot[bot]"],
             reviewer: {
                 kind: "kiro",
@@ -39,6 +41,8 @@ repositories = [
                     owner: "Org",
                     repo: "Repo",
                     maxPullRequests: 10,
+                    includedAuthors: [],
+                    includedAssignees: [],
                     skippedAuthors: ["renovate", "renovate[bot]", "dependabot", "dependabot[bot]"],
                 },
             ],
@@ -87,8 +91,35 @@ branch = "main"
                     repo: "project",
                     branch: "main",
                     maxPullRequests: 3,
-                    skippedAuthors: ["repo-bot"],
+                    skippedAuthors: ["bot", "repo-bot"],
                     promptInstructions: "Focus on API compatibility.",
+                },
+            ],
+        });
+    });
+
+    it("merges global and repository pull request filters", async () => {
+        const path = await writeConfig(`
+included_authors = ["alice"]
+included_assignees = ["bob"]
+skipped_authors = ["bot"]
+
+[[repositories]]
+url = "https://github.com/example/project"
+included_authors = ["carol"]
+included_assignees = ["dave"]
+skipped_authors = ["repo-bot"]
+`);
+
+        await expect(loadConfig(path)).resolves.toMatchObject({
+            includedAuthors: ["alice"],
+            includedAssignees: ["bob"],
+            skippedAuthors: ["bot"],
+            repositories: [
+                {
+                    includedAuthors: ["alice", "carol"],
+                    includedAssignees: ["bob", "dave"],
+                    skippedAuthors: ["bot", "repo-bot"],
                 },
             ],
         });

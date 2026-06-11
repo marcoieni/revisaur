@@ -1,6 +1,8 @@
 output_dir = "site-dist"
 data_dir = ".revisaur/data"
 max_pull_requests = 10
+included_authors = []
+included_assignees = []
 skipped_authors = ["renovate", "renovate[bot]", "dependabot", "dependabot[bot]"]
 prompt_instructions = "Prioritize correctness, security, and regressions over style nits."
 
@@ -16,4 +18,5 @@ name = "Astro"
 provider = "github"
 url = "https://github.com/withastro/astro"
 max_pull_requests = 5
+# Repository-level filters are unioned with global filters, not overridden.
 # prompt_instructions = "Repository-specific instructions override the global prompt_instructions value."

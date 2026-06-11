@@ -233,6 +233,8 @@ function demoRepositories(): RepositoryConfig[] {
             owner: "example",
             repo: "octoflow-api",
             maxPullRequests: 5,
+            includedAuthors: [],
+            includedAssignees: [],
             skippedAuthors: [],
         },
         {
@@ -243,6 +245,8 @@ function demoRepositories(): RepositoryConfig[] {
             owner: "example",
             repo: "launchpad-web",
             maxPullRequests: 5,
+            includedAuthors: [],
+            includedAssignees: [],
             skippedAuthors: [],
         },
         {
@@ -253,6 +257,8 @@ function demoRepositories(): RepositoryConfig[] {
             owner: "example",
             repo: "nimbus-worker",
             maxPullRequests: 5,
+            includedAuthors: [],
+            includedAssignees: [],
             skippedAuthors: [],
         },
     ];

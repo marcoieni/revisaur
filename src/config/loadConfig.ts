@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { RepositoryConfig, RevisaurConfig } from "../types/revisaur.js";
 
 const dataDirKey = "data_dir";
+const includedAssigneesKey = "included_assignees";
+const includedAuthorsKey = "included_authors";
 const maxPullRequestsKey = "max_pull_requests";
 const outputDirKey = "output_dir";
 const promptInstructionsKey = "prompt_instructions";
@@ -17,6 +19,8 @@ const repositorySchema = z.object({
     provider: z.enum(["github", "gitlab", "forgejo"]).default("github"),
     url: z.url(),
     [maxPullRequestsKey]: z.number().int().positive().optional(),
+    [includedAuthorsKey]: z.array(z.string()).optional(),
+    [includedAssigneesKey]: z.array(z.string()).optional(),
     [skippedAuthorsKey]: z.array(z.string()).optional(),
     [promptInstructionsKey]: z.string().trim().min(1).optional(),
     branch: z.string().optional(),
@@ -26,6 +30,8 @@ const configSchema = z.object({
     [outputDirKey]: z.string().default("site-dist"),
     [dataDirKey]: z.string().default(".revisaur/data"),
     [maxPullRequestsKey]: z.number().int().positive().default(10),
+    [includedAuthorsKey]: z.array(z.string()).default([]),
+    [includedAssigneesKey]: z.array(z.string()).default([]),
     [skippedAuthorsKey]: z.array(z.string()).default(["renovate", "renovate[bot]", "dependabot", "dependabot[bot]"]),
     [promptInstructionsKey]: z.string().trim().min(1).optional(),
     reviewer: z
@@ -56,7 +62,9 @@ export async function loadConfig(path: string): Promise<RevisaurConfig> {
             repo: github.repo,
             branch: repo.branch,
             maxPullRequests: repo.max_pull_requests ?? parsed.max_pull_requests,
-            skippedAuthors: repo.skipped_authors ?? parsed.skipped_authors,
+            includedAuthors: mergeUsers(parsed.included_authors, repo.included_authors),
+            includedAssignees: mergeUsers(parsed.included_assignees, repo.included_assignees),
+            skippedAuthors: mergeUsers(parsed.skipped_authors, repo.skipped_authors),
             promptInstructions: repo.prompt_instructions ?? parsed.prompt_instructions,
         };
     });
@@ -65,6 +73,8 @@ export async function loadConfig(path: string): Promise<RevisaurConfig> {
         outputDir: parsed.output_dir,
         dataDir: parsed.data_dir,
         maxPullRequests: parsed.max_pull_requests,
+        includedAuthors: parsed.included_authors,
+        includedAssignees: parsed.included_assignees,
         skippedAuthors: parsed.skipped_authors,
         promptInstructions: parsed.prompt_instructions,
         reviewer: {
@@ -76,6 +86,10 @@ export async function loadConfig(path: string): Promise<RevisaurConfig> {
         },
         repositories,
     };
+}
+
+function mergeUsers(globalUsers: string[], repositoryUsers: string[] | undefined): string[] {
+    return [...new Set([...globalUsers, ...(repositoryUsers ?? [])])];
 }
 
 function parseGitHubUrl(url: string): { owner: string; repo: string } {
