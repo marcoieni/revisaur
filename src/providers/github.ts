@@ -4,6 +4,7 @@ import type { PullRequestSummary, RepositoryConfig } from "../types/revisaur.js"
 
 const perPageKey = "per_page";
 const pullNumberKey = "pull_number";
+const maxPullRequestPages = 5;
 const pullRequestsPageSize = 100;
 
 type GitHubPullRequest = Awaited<ReturnType<Octokit["rest"]["pulls"]["list"]>>["data"][number];
@@ -26,7 +27,7 @@ export class GitHubProvider implements RepositoryProvider {
         const pullRequests: GitHubPullRequest[] = [];
         let page = 1;
 
-        while (pullRequests.length < repo.maxPullRequests) {
+        while (pullRequests.length < repo.maxPullRequests && page <= maxPullRequestPages) {
             const response = await this.#client.rest.pulls.list({
                 owner: repo.owner,
                 repo: repo.repo,
