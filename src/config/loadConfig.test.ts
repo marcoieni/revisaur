@@ -59,6 +59,7 @@ prompt_instructions = "Focus on correctness and security."
 kind = "codex"
 command = "codex"
 model = "claude-sonnet-4.5"
+reasoning_level = "high"
 trust_tools = "read"
 timeout_seconds = 120
 
@@ -80,6 +81,7 @@ branch = "main"
                 kind: "codex",
                 command: "codex",
                 model: "claude-sonnet-4.5",
+                reasoningLevel: "high",
                 trustTools: "read",
                 timeoutSeconds: 120,
             },

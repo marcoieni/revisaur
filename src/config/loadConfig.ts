@@ -9,6 +9,7 @@ const includedAuthorsKey = "included_authors";
 const maxPullRequestsKey = "max_pull_requests";
 const outputDirKey = "output_dir";
 const promptInstructionsKey = "prompt_instructions";
+const reasoningLevelKey = "reasoning_level";
 const skippedAuthorsKey = "skipped_authors";
 const timeoutSecondsKey = "timeout_seconds";
 const trustToolsKey = "trust_tools";
@@ -39,6 +40,7 @@ const configSchema = z.object({
             kind: z.enum(["kiro", "codex"]).default("kiro"),
             command: z.string().default("kiro-cli"),
             model: z.string().trim().min(1).optional(),
+            [reasoningLevelKey]: z.string().trim().min(1).optional(),
             [trustToolsKey]: z.string().default("read,grep"),
             [timeoutSecondsKey]: z.number().int().positive().default(900),
         })
@@ -81,6 +83,7 @@ export async function loadConfig(path: string): Promise<RevisaurConfig> {
             kind: parsed.reviewer.kind,
             command: parsed.reviewer.command,
             model: parsed.reviewer.model,
+            reasoningLevel: parsed.reviewer.reasoning_level,
             trustTools: parsed.reviewer.trust_tools,
             timeoutSeconds: parsed.reviewer.timeout_seconds,
         },

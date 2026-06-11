@@ -19,6 +19,7 @@ export interface ReviewerConfig {
     kind: "codex" | "kiro";
     command: string;
     model?: string;
+    reasoningLevel?: string;
     trustTools: string;
     timeoutSeconds: number;
 }
@@ -65,6 +66,7 @@ export interface PullRequestReview {
     repoId: string;
     pullRequest: PullRequestSummary;
     status: ReviewStatus;
+    reviewer?: ReviewExecutionMetadata;
     reviewedCommit: string;
     reviewedAt: string;
     summary: string;
@@ -72,6 +74,12 @@ export interface PullRequestReview {
     diff: string;
     comments: ReviewComment[];
     error?: string;
+}
+
+export interface ReviewExecutionMetadata {
+    harness: string;
+    model: string;
+    reasoningLevel: string;
 }
 
 export interface ReviewState {

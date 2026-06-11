@@ -78,6 +78,7 @@ prompt_instructions = "Prioritize correctness, security, and regressions over st
 kind = "kiro"
 command = "kiro-cli"
 model = "claude-opus-4.7"
+reasoning_level = "default"
 trust_tools = "read,grep,glob"
 timeout_seconds = 900
 
