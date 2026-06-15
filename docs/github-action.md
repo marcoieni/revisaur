@@ -59,6 +59,6 @@ The build job is the only job that runs the AI reviewer, so it gets read-only re
 
 By default the action caches `.revisaur/data`, matching the default `data_dir`. If your `revisaur.toml` uses a different `data_dir`, pass the same path as `cache-path` to the action.
 
-Uncached reviews use temporary shallow git checkouts so the AI reviewer can inspect repository files. Those checkouts live outside `data_dir` and are removed after each review, so the action cache stores only review state.
+Uncached reviews use temporary shallow git checkouts so the AI reviewer can inspect repository files. Each repository is cloned at most once per run, outside `data_dir`, and the checkout is removed after that repository's reviews finish, so the action cache stores only review state.
 
 For now the provider implementation supports GitHub repository URLs. The config keeps an explicit `provider` field so GitLab and Forgejo providers can be added without changing the file shape.
