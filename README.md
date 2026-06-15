@@ -103,7 +103,8 @@ Use `prompt_instructions` to add reviewer guidance to the generated prompt. A re
 
 Revisaur stores review state in `.revisaur/data/state.json`. A PR commit is reviewed once per repository, PR number, and head SHA. If a PR receives new commits, the changed head SHA causes a new review. Existing reviews are reused when rebuilding the website.
 
-When Revisaur needs a new review, it creates a temporary shallow checkout of the pull request head commit and runs the reviewer from that directory. The checkout gives the AI reviewer full repository context, then Revisaur removes it after the review so it is not included in the review state cache.
+When Revisaur needs to run a review, it creates a temporary shallow checkout of the pull request head commit so that AI can access the full repository context.
+After all reviews, Revisaur removes the temporary checkout so that it is not included in the review state cache.
 
 ## GitHub Pages
 
