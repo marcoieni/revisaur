@@ -8,31 +8,45 @@ const gitTerminalPromptKey = "GIT_TERMINAL_PROMPT";
 
 export interface ReviewCheckout {
     path: string;
+    checkoutPullRequest(pullRequest: PullRequestSummary): Promise<void>;
     dispose(): Promise<void>;
 }
 
-export async function clonePullRequestCheckout(
-    repo: RepositoryConfig,
-    pullRequest: PullRequestSummary,
-): Promise<ReviewCheckout> {
+export async function cloneRepositoryCheckout(repo: RepositoryConfig): Promise<ReviewCheckout> {
     const checkoutPath = await mkdtemp(path.join(tmpdir(), "revisaur-checkout-"));
 
     try {
         await git(["clone", "--depth", "1", "--no-tags", "--single-branch", repo.url, checkoutPath]);
+
+        return {
+            path: checkoutPath,
+            checkoutPullRequest: (pullRequest) => checkoutPullRequest(repo, checkoutPath, pullRequest),
+            dispose: () => removeCheckout(checkoutPath),
+        };
+    } catch (error) {
+        await removeCheckout(checkoutPath);
+        throw new Error(`Could not clone review checkout for ${repo.name}: ${formatCheckoutError(error)}`, {
+            cause: error,
+        });
+    }
+}
+
+async function checkoutPullRequest(
+    repo: RepositoryConfig,
+    checkoutPath: string,
+    pullRequest: PullRequestSummary,
+): Promise<void> {
+    try {
+        await git(["reset", "--hard"], checkoutPath);
+        await git(["clean", "-fdx"], checkoutPath);
         await git(["fetch", "--depth", "1", "--no-tags", "origin", pullRequestFetchRef(pullRequest)], checkoutPath);
-        await git(["checkout", "--detach", "FETCH_HEAD"], checkoutPath);
+        await git(["checkout", "--force", "--detach", "FETCH_HEAD"], checkoutPath);
 
         const head = (await git(["rev-parse", "HEAD"], checkoutPath)).stdout.trim();
         if (head !== pullRequest.headSha) {
             throw new Error(`Expected head ${pullRequest.headSha}, got ${head}.`);
         }
-
-        return {
-            path: checkoutPath,
-            dispose: () => removeCheckout(checkoutPath),
-        };
     } catch (error) {
-        await removeCheckout(checkoutPath);
         throw new Error(
             `Could not prepare review checkout for ${repo.name} PR #${pullRequest.number.toString()}: ${formatCheckoutError(error)}`,
             { cause: error },

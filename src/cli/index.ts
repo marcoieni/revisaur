@@ -6,7 +6,7 @@ import { ensureDir, writeJson } from "fs-extra/esm";
 import { execa } from "execa";
 import { loadConfig } from "../config/loadConfig.js";
 import { providerFor } from "../providers/index.js";
-import { clonePullRequestCheckout, type ReviewCheckout } from "../repositories/checkout.js";
+import { cloneRepositoryCheckout, type ReviewCheckout } from "../repositories/checkout.js";
 import { reviewerFor } from "../reviewers/index.js";
 import { emptyState, isReusableReview, loadState, reviewKey, saveState } from "../state/reviewState.js";
 import type {
@@ -83,79 +83,100 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
         const provider = providerFor(repo);
         const pullRequests = await provider.listRecentlyUpdatedPullRequests(repo);
         console.log(`${logIcon.search} Found ${pullRequests.length.toString()} pull requests for ${repo.name}.`);
+        let checkout: ReviewCheckout | undefined;
+        let checkoutError: Error | undefined;
 
-        for (const pullRequest of pullRequests) {
-            const key = reviewKey(pullRequest);
-            const label = `${repo.name} PR #${pullRequest.number.toString()}`;
-            reviewKeys.push(key);
+        try {
+            for (const pullRequest of pullRequests) {
+                const key = reviewKey(pullRequest);
+                const label = `${repo.name} PR #${pullRequest.number.toString()}`;
+                reviewKeys.push(key);
 
-            if (isReusableReview(state.reviews[key])) {
-                cachedReviews += 1;
+                if (isReusableReview(state.reviews[key])) {
+                    cachedReviews += 1;
+                    console.log(
+                        `${logIcon.cache} Using cached review for ${label} at ${pullRequest.headSha.slice(0, 8)} (${state.reviews[key].status}).`,
+                    );
+                    continue;
+                }
+
                 console.log(
-                    `${logIcon.cache} Using cached review for ${label} at ${pullRequest.headSha.slice(0, 8)} (${state.reviews[key].status}).`,
+                    `${logIcon.info} No successful cached review for ${label} at ${pullRequest.headSha.slice(0, 8)}.`,
                 );
-                continue;
+                console.log(`${logIcon.review} Reviewing ${label}: ${pullRequest.title}`);
+
+                const diff = await provider.getPullRequestDiff(repo, pullRequest.number);
+                const reviewedAt = new Date().toISOString();
+
+                try {
+                    if (checkoutError !== undefined) {
+                        throw checkoutError;
+                    }
+
+                    if (checkout === undefined) {
+                        try {
+                            checkout = await cloneRepositoryCheckout(repo);
+                            console.log(
+                                `${logIcon.info} Prepared temporary checkout for ${repo.name} at ${checkout.path}.`,
+                            );
+                        } catch (error) {
+                            checkoutError = error instanceof Error ? error : new Error(String(error), { cause: error });
+                            throw checkoutError;
+                        }
+                    }
+
+                    await checkout.checkoutPullRequest(pullRequest);
+                    console.log(
+                        `${logIcon.info} Checked out ${label} at ${pullRequest.headSha.slice(0, 8)} for review.`,
+                    );
+
+                    const result = await reviewer.review({
+                        repositoryUrl: repo.url,
+                        repositoryPath: checkout.path,
+                        pullRequest,
+                        diff,
+                        promptInstructions: repo.promptInstructions,
+                    });
+                    const review: PullRequestReview = {
+                        repoId: repo.id,
+                        pullRequest,
+                        status: "reviewed",
+                        reviewer: reviewerMetadata,
+                        reviewedCommit: pullRequest.headSha,
+                        reviewedAt,
+                        summary: result.summary,
+                        rawOutput: result.rawOutput,
+                        diff,
+                        comments: result.comments,
+                    };
+                    state.reviews[key] = review;
+                    completedReviews += 1;
+                    console.log(
+                        `${logIcon.complete} Review completed for ${label} with ${result.comments.length.toString()} comments.`,
+                    );
+                } catch (error) {
+                    const review: PullRequestReview = {
+                        repoId: repo.id,
+                        pullRequest,
+                        status: "failed",
+                        reviewer: reviewerMetadata,
+                        reviewedCommit: pullRequest.headSha,
+                        reviewedAt,
+                        summary: "Review failed.",
+                        rawOutput: "",
+                        diff,
+                        comments: [],
+                        error: error instanceof Error ? error.message : String(error),
+                    };
+                    state.reviews[key] = review;
+                    failedReviews += 1;
+                    console.log(`${logIcon.error} Review failed for ${label}: ${review.error ?? "Unknown error"}`);
+                }
+
+                await saveState(statePath, state);
             }
-
-            console.log(
-                `${logIcon.info} No successful cached review for ${label} at ${pullRequest.headSha.slice(0, 8)}.`,
-            );
-            console.log(`${logIcon.review} Reviewing ${label}: ${pullRequest.title}`);
-
-            const diff = await provider.getPullRequestDiff(repo, pullRequest.number);
-            const reviewedAt = new Date().toISOString();
-            let checkout: ReviewCheckout | undefined;
-
-            try {
-                checkout = await clonePullRequestCheckout(repo, pullRequest);
-                console.log(`${logIcon.info} Prepared temporary checkout for ${label} at ${checkout.path}.`);
-
-                const result = await reviewer.review({
-                    repositoryUrl: repo.url,
-                    repositoryPath: checkout.path,
-                    pullRequest,
-                    diff,
-                    promptInstructions: repo.promptInstructions,
-                });
-                const review: PullRequestReview = {
-                    repoId: repo.id,
-                    pullRequest,
-                    status: "reviewed",
-                    reviewer: reviewerMetadata,
-                    reviewedCommit: pullRequest.headSha,
-                    reviewedAt,
-                    summary: result.summary,
-                    rawOutput: result.rawOutput,
-                    diff,
-                    comments: result.comments,
-                };
-                state.reviews[key] = review;
-                completedReviews += 1;
-                console.log(
-                    `${logIcon.complete} Review completed for ${label} with ${result.comments.length.toString()} comments.`,
-                );
-            } catch (error) {
-                const review: PullRequestReview = {
-                    repoId: repo.id,
-                    pullRequest,
-                    status: "failed",
-                    reviewer: reviewerMetadata,
-                    reviewedCommit: pullRequest.headSha,
-                    reviewedAt,
-                    summary: "Review failed.",
-                    rawOutput: "",
-                    diff,
-                    comments: [],
-                    error: error instanceof Error ? error.message : String(error),
-                };
-                state.reviews[key] = review;
-                failedReviews += 1;
-                console.log(`${logIcon.error} Review failed for ${label}: ${review.error ?? "Unknown error"}`);
-            } finally {
-                await checkout?.dispose();
-            }
-
-            await saveState(statePath, state);
+        } finally {
+            await checkout?.dispose();
         }
     }
 
