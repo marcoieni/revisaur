@@ -107,6 +107,21 @@ describe("KiroReviewer", () => {
         );
     });
 
+    it("runs Kiro from the repository checkout when one is available", async () => {
+        await new KiroReviewer(config()).review({
+            ...request,
+            repositoryPath: "/tmp/revisaur-checkout-abc123",
+        });
+
+        expect(execa).toHaveBeenCalledWith(
+            "kiro-cli",
+            expect.arrayContaining([
+                expect.stringContaining("The repository is checked out at the pull request head commit"),
+            ]),
+            expect.objectContaining({ cwd: "/tmp/revisaur-checkout-abc123" }),
+        );
+    });
+
     it("includes configured prompt instructions in the review prompt", async () => {
         await new KiroReviewer(config()).review({
             ...request,

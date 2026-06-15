@@ -6,6 +6,7 @@ import { ensureDir, writeJson } from "fs-extra/esm";
 import { execa } from "execa";
 import { loadConfig } from "../config/loadConfig.js";
 import { providerFor } from "../providers/index.js";
+import { clonePullRequestCheckout, type ReviewCheckout } from "../repositories/checkout.js";
 import { reviewerFor } from "../reviewers/index.js";
 import { emptyState, isReusableReview, loadState, reviewKey, saveState } from "../state/reviewState.js";
 import type {
@@ -103,10 +104,15 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
 
             const diff = await provider.getPullRequestDiff(repo, pullRequest.number);
             const reviewedAt = new Date().toISOString();
+            let checkout: ReviewCheckout | undefined;
 
             try {
+                checkout = await clonePullRequestCheckout(repo, pullRequest);
+                console.log(`${logIcon.info} Prepared temporary checkout for ${label} at ${checkout.path}.`);
+
                 const result = await reviewer.review({
                     repositoryUrl: repo.url,
+                    repositoryPath: checkout.path,
                     pullRequest,
                     diff,
                     promptInstructions: repo.promptInstructions,
@@ -145,6 +151,8 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
                 state.reviews[key] = review;
                 failedReviews += 1;
                 console.log(`${logIcon.error} Review failed for ${label}: ${review.error ?? "Unknown error"}`);
+            } finally {
+                await checkout?.dispose();
             }
 
             await saveState(statePath, state);
