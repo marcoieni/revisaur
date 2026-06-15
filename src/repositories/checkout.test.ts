@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execa } from "execa";
 import { cloneRepositoryCheckout } from "./checkout.js";
 import type { PullRequestSummary, RepositoryConfig } from "../types/revisaur.js";
@@ -20,6 +20,11 @@ vi.mock("execa", () => ({
 }));
 
 let currentHeadSha = "";
+const gitConfigCountKey = "GIT_CONFIG_COUNT";
+const gitConfigKey0 = "GIT_CONFIG_KEY_0";
+const gitConfigValue0 = "GIT_CONFIG_VALUE_0";
+const gitTerminalPromptKey = "GIT_TERMINAL_PROMPT";
+const originalGitHubToken = process.env.GITHUB_TOKEN;
 
 const repository: RepositoryConfig = {
     id: "github-example-project",
@@ -58,6 +63,15 @@ describe("cloneRepositoryCheckout", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         currentHeadSha = pullRequest.headSha;
+        Reflect.deleteProperty(process.env, "GITHUB_TOKEN");
+    });
+
+    afterEach(() => {
+        if (originalGitHubToken === undefined) {
+            Reflect.deleteProperty(process.env, "GITHUB_TOKEN");
+        } else {
+            process.env.GITHUB_TOKEN = originalGitHubToken;
+        }
     });
 
     it("clones once and checks out pull request heads in the same repository", async () => {
@@ -93,6 +107,37 @@ describe("cloneRepositoryCheckout", () => {
         await expect(access(checkout.path)).rejects.toThrow();
     });
 
+    it("authenticates GitHub clone and fetch commands with GITHUB_TOKEN", async () => {
+        process.env.GITHUB_TOKEN = "github-token";
+        const checkout = await cloneRepositoryCheckout(repository);
+
+        try {
+            await checkout.checkoutPullRequest(pullRequest);
+
+            const expectedAuthEnv: Record<string, string> = {
+                [gitConfigCountKey]: "1",
+                [gitConfigKey0]: "http.https://github.com/.extraheader",
+                [gitConfigValue0]: `AUTHORIZATION: basic ${Buffer.from("x-access-token:github-token").toString("base64")}`,
+                [gitTerminalPromptKey]: "0",
+            };
+
+            expect(execa).toHaveBeenCalledWith(
+                "git",
+                ["clone", "--depth", "1", "--no-tags", "--single-branch", repository.url, checkout.path],
+                expect.objectContaining({ reject: true }),
+            );
+            expect(gitSubcommandOptions("clone").env).toMatchObject(expectedAuthEnv);
+            expect(execa).toHaveBeenCalledWith(
+                "git",
+                ["fetch", "--depth", "1", "--no-tags", "origin", "refs/pull/123/head"],
+                expect.objectContaining({ cwd: checkout.path, reject: true }),
+            );
+            expect(gitSubcommandOptions("fetch").env).toMatchObject(expectedAuthEnv);
+        } finally {
+            await checkout.dispose();
+        }
+    });
+
     it("reports clone failures", async () => {
         vi.mocked(execa).mockRejectedValueOnce({ stderr: "fatal: repository not found" });
 
@@ -118,4 +163,13 @@ describe("cloneRepositoryCheckout", () => {
 
 function gitSubcommandCallCount(subcommand: string): number {
     return vi.mocked(execa).mock.calls.filter((call) => call[1][0] === subcommand).length;
+}
+
+function gitSubcommandOptions(subcommand: string): { cwd?: string; env?: NodeJS.ProcessEnv; reject?: boolean } {
+    const call = vi.mocked(execa).mock.calls.find((mockCall) => mockCall[1][0] === subcommand);
+    if (call === undefined) {
+        throw new Error(`Expected git ${subcommand} to be called.`);
+    }
+
+    return call[2] as { cwd?: string; env?: NodeJS.ProcessEnv; reject?: boolean };
 }

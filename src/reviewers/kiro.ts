@@ -1,3 +1,4 @@
+import path from "node:path";
 import { execa } from "execa";
 import type { Reviewer, ReviewRequest, ReviewResult } from "./reviewer.js";
 import type { ReviewComment, ReviewerConfig } from "../types/revisaur.js";
@@ -19,7 +20,16 @@ const reviewJsonShape = `{
 }`;
 
 export class KiroReviewer implements Reviewer {
-    constructor(private readonly config: ReviewerConfig) {}
+    private readonly command: string;
+
+    constructor(
+        private readonly config: ReviewerConfig,
+        commandBaseDir = process.cwd(),
+    ) {
+        // Resolve relative wrapper commands before running from a PR checkout so
+        // attacker-controlled repository files cannot shadow the reviewer binary.
+        this.command = resolveReviewerCommand(config.command, commandBaseDir);
+    }
 
     async review(request: ReviewRequest): Promise<ReviewResult> {
         const prompt = buildPrompt(request);
@@ -44,7 +54,7 @@ export class KiroReviewer implements Reviewer {
         }
         args.push(prompt);
 
-        const result = await execa(this.config.command, args, {
+        const result = await execa(this.command, args, {
             timeout: this.config.timeoutSeconds * 1000,
             // The reviewer consumes attacker-influenced PR diffs, so do not inherit
             // workflow credentials such as GITHUB_TOKEN.
@@ -61,6 +71,18 @@ export class KiroReviewer implements Reviewer {
 
         return rawOutput;
     }
+}
+
+function resolveReviewerCommand(command: string, baseDir: string): string {
+    if (!hasPathSeparator(command) || path.isAbsolute(command)) {
+        return command;
+    }
+
+    return path.resolve(baseDir, command);
+}
+
+function hasPathSeparator(command: string): boolean {
+    return command.includes("/") || command.includes("\\");
 }
 
 function reviewerEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
