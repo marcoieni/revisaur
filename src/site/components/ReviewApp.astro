@@ -76,6 +76,19 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
   return `Reviewed at ${reviewedAt}. ${executionTooltip.replaceAll("\n", ". ")}`;
 }
 
+function reviewSearchValues(review: PullRequestReview): string[] {
+  return [
+    `#${review.pullRequest.number}`,
+    review.pullRequest.number.toString(),
+    review.pullRequest.title,
+    review.pullRequest.author,
+    ...(review.pullRequest.assignees ?? []),
+    prReviewStateLabel(review),
+    review.status,
+    review.reviewedCommit.slice(0, 8),
+  ];
+}
+
 ---
 
 <main class="app-shell" style={iconStyle}>
@@ -130,6 +143,18 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
         </label>
       </fieldset>
       <div class="filter-controls" aria-label="Review filters">
+        <search class="review-search" aria-label="Search pull requests">
+          <label class="sr-only" for="review-search-input">Search pull requests</label>
+          <input
+            id="review-search-input"
+            type="search"
+            placeholder="Search PRs"
+            autocomplete="off"
+            spellcheck="false"
+            data-review-search
+          />
+          <button class="review-search-clear" type="button" aria-label="Clear pull request search" hidden></button>
+        </search>
         <RepositoryPicker repositories={repositories} initialRepo={initialRepo} />
         <FilterPicker
           id="author"
@@ -184,7 +209,7 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
           </div>
           {reviews
             .filter((review) => review.repoId === repo.id)
-            .map((review) => {
+            .map((review, reviewIndex) => {
               const authorUrl = getUserUrl(review, review.pullRequest.author);
               const assignees = review.pullRequest.assignees ?? [];
               const reviewedAt = new Date(review.reviewedAt).toLocaleString();
@@ -195,6 +220,8 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
                 <article
                   class="review"
                   data-review-key={reviewKey}
+                  data-review-order={reviewIndex}
+                  data-search={JSON.stringify(reviewSearchValues(review))}
                   data-author={review.pullRequest.author}
                   data-assignees={JSON.stringify(assignees)}
                   data-collapsed
@@ -287,6 +314,8 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
     }
   </section>
 
+  <p class="empty-state" data-review-empty hidden>No pull requests match the current filters.</p>
+
   <footer class="privacy-notice" aria-labelledby="privacy-notice-title">
     <h2 id="privacy-notice-title">Privacy notice</h2>
     <p>
@@ -299,8 +328,12 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
 <script>
   import { loadAddressedState, setAddressedValue } from "../runtime/addressed.js";
   import "../runtime/diffs.js";
+  import { bestFuzzyScore } from "../runtime/search.js";
 
   const sections = [...document.querySelectorAll<HTMLElement>(".repo-section")];
+  const reviewSearchInput = document.querySelector<HTMLInputElement>("[data-review-search]");
+  const reviewSearchClear = document.querySelector<HTMLButtonElement>(".review-search-clear");
+  const emptyState = document.querySelector<HTMLElement>("[data-review-empty]");
   const authorPicker = document.querySelector<HTMLElement>('[data-filter-picker][data-detail-key="authors"]');
   const assigneePicker = document.querySelector<HTMLElement>('[data-filter-picker][data-detail-key="assignees"]');
   const authorOptions = [
@@ -318,6 +351,7 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
   const allRepositoriesId = "__all";
   const allAuthorsId = "__all";
   const allAssigneesId = "__all";
+  let reviewSearchQuery = "";
   let selectedRepoIds = [document.querySelector<HTMLElement>(".repo-section:not([hidden])")?.dataset.repo ?? allRepositoriesId];
   let selectedAuthors = [allAuthorsId];
   let selectedAssignees = [allAssigneesId];
@@ -329,6 +363,14 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
   const isColorMode = (value: string | null): value is ColorMode => value === "light" || value === "dark";
   const isDiffOverflow = (value: string | null): value is DiffOverflow => value === "scroll" || value === "wrap";
   const isDiffLayout = (value: string | null): value is DiffLayout => value === "split" || value === "stacked";
+  const reviewSearchValues = (review: HTMLElement): string[] => {
+    try {
+      const value = JSON.parse(review.dataset.search ?? "[]") as unknown;
+      return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  };
   const updateReviewCollapseButton = (button: HTMLButtonElement, collapsed: boolean) => {
     button.title = collapsed ? "Expand pull request" : "Collapse pull request";
     button.setAttribute("aria-label", button.title);
@@ -453,21 +495,39 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
     const showAllRepositories = selectedRepoIds.includes(allRepositoriesId);
     const showAllAuthors = selectedAuthors.includes(allAuthorsId);
     const showAllAssignees = selectedAssignees.includes(allAssigneesId);
+    const query = reviewSearchQuery.trim();
+    const reviewFiltersActive = !showAllAuthors || !showAllAssignees || query !== "";
+    let hasVisibleSections = false;
 
     for (const section of sections) {
       const repoMatches = showAllRepositories || selectedRepoIds.includes(section.dataset.repo ?? "");
+      const scoredReviews = [...section.querySelectorAll<HTMLElement>(".review")]
+        .map((review, domIndex) => {
+          const reviewOrder = Number.parseInt(review.dataset.reviewOrder ?? "", 10);
+          const index = Number.isFinite(reviewOrder) ? reviewOrder : domIndex;
+          const score = query === "" ? index : bestFuzzyScore(reviewSearchValues(review), query);
+          return { index, review, score };
+        })
+        .sort((first, second) => first.score - second.score || first.index - second.index);
       let hasVisibleReviews = false;
 
-      for (const review of section.querySelectorAll<HTMLElement>(".review")) {
+      for (const { review, score } of scoredReviews) {
         const authorMatches = showAllAuthors || selectedAuthors.includes(review.dataset.author ?? "");
         const reviewAssignees = JSON.parse(review.dataset.assignees ?? "[]") as string[];
         const assigneeMatches = showAllAssignees || reviewAssignees.some((assignee) => selectedAssignees.includes(assignee));
-        const reviewMatches = authorMatches && assigneeMatches;
+        const searchMatches = query === "" || Number.isFinite(score);
+        const reviewMatches = authorMatches && assigneeMatches && searchMatches;
         review.hidden = !reviewMatches;
         hasVisibleReviews = hasVisibleReviews || reviewMatches;
+        section.append(review);
       }
 
-      section.hidden = !repoMatches || ((!showAllAuthors || !showAllAssignees) && !hasVisibleReviews);
+      section.hidden = !repoMatches || (reviewFiltersActive && !hasVisibleReviews);
+      hasVisibleSections = hasVisibleSections || !section.hidden;
+    }
+
+    if (emptyState) {
+      emptyState.hidden = hasVisibleSections;
     }
   };
 
@@ -528,6 +588,24 @@ function reviewDateAriaLabel(reviewedAt: string, executionTooltip: string): stri
       ? event.detail.assignees
       : [];
     applyReviewFilters();
+  });
+
+  reviewSearchInput?.addEventListener("input", () => {
+    reviewSearchQuery = reviewSearchInput.value;
+    if (reviewSearchClear) {
+      reviewSearchClear.hidden = reviewSearchQuery.length === 0;
+    }
+    applyReviewFilters();
+  });
+
+  reviewSearchClear?.addEventListener("click", () => {
+    if (!reviewSearchInput) return;
+
+    reviewSearchInput.value = "";
+    reviewSearchQuery = "";
+    reviewSearchClear.hidden = true;
+    applyReviewFilters();
+    reviewSearchInput.focus();
   });
 
   updateAuthorFilterOptions();

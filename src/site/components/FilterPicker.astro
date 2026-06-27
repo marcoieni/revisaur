@@ -107,34 +107,7 @@ const {
 </div>
 
 <script>
-  const fuzzyScore = (value: string, query: string) => {
-    const normalizedQuery = query.toLowerCase();
-    const normalizedValue = value.toLowerCase();
-
-    if (normalizedValue === normalizedQuery) return 0;
-
-    const tokenIndex = normalizedValue.split(/[^a-z0-9]+/).findIndex((token) => token.startsWith(normalizedQuery));
-    if (tokenIndex !== -1) return 5 + tokenIndex;
-
-    const startsAt = normalizedValue.indexOf(normalizedQuery);
-    if (startsAt !== -1) return 10 + startsAt;
-
-    let cursor = 0;
-    let firstMatch = -1;
-    let lastMatch = -1;
-    let gaps = 0;
-
-    for (const character of normalizedQuery) {
-      const matchIndex = normalizedValue.indexOf(character, cursor);
-      if (matchIndex === -1) return Number.POSITIVE_INFINITY;
-      if (lastMatch !== -1) gaps += matchIndex - lastMatch - 1;
-      if (firstMatch === -1) firstMatch = matchIndex;
-      lastMatch = matchIndex;
-      cursor = matchIndex + 1;
-    }
-
-    return 100 + firstMatch * 2 + gaps * 10;
-  };
+  import { fuzzyScore } from "../runtime/search.js";
 
   for (const picker of document.querySelectorAll<HTMLElement>("[data-filter-picker]")) {
     const trigger = picker.querySelector<HTMLButtonElement>(".filter-trigger");
