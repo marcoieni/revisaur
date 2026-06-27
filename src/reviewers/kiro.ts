@@ -1,3 +1,4 @@
+import path from "node:path";
 import { execa } from "execa";
 import type { Reviewer, ReviewRequest, ReviewResult } from "./reviewer.js";
 import type { ReviewComment, ReviewerConfig } from "../types/revisaur.js";
@@ -19,16 +20,25 @@ const reviewJsonShape = `{
 }`;
 
 export class KiroReviewer implements Reviewer {
-    constructor(private readonly config: ReviewerConfig) {}
+    private readonly command: string;
+
+    constructor(
+        private readonly config: ReviewerConfig,
+        commandBaseDir = process.cwd(),
+    ) {
+        // Resolve relative wrapper commands before running from a PR checkout so
+        // attacker-controlled repository files cannot shadow the reviewer binary.
+        this.command = resolveReviewerCommand(config.command, commandBaseDir);
+    }
 
     async review(request: ReviewRequest): Promise<ReviewResult> {
         const prompt = buildPrompt(request);
-        const rawOutput = await this.runKiro(prompt);
+        const rawOutput = await this.runKiro(prompt, request.repositoryPath);
         try {
             return parseReviewOutput(rawOutput);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            const repairedOutput = await this.runKiro(buildRepairPrompt(request, rawOutput));
+            const repairedOutput = await this.runKiro(buildRepairPrompt(request, rawOutput), request.repositoryPath);
             try {
                 return parseReviewOutput(repairedOutput);
             } catch {
@@ -37,18 +47,19 @@ export class KiroReviewer implements Reviewer {
         }
     }
 
-    private async runKiro(prompt: string): Promise<string> {
+    private async runKiro(prompt: string, cwd?: string): Promise<string> {
         const args = ["chat", "--no-interactive", `--trust-tools=${this.config.trustTools}`];
         if (this.config.model !== undefined && this.config.model !== "") {
             args.push("--model", this.config.model);
         }
         args.push(prompt);
 
-        const result = await execa(this.config.command, args, {
+        const result = await execa(this.command, args, {
             timeout: this.config.timeoutSeconds * 1000,
             // The reviewer consumes attacker-influenced PR diffs, so do not inherit
             // workflow credentials such as GITHUB_TOKEN.
             env: reviewerEnvironment(),
+            ...(cwd === undefined ? {} : { cwd }),
             reject: false,
         });
 
@@ -60,6 +71,18 @@ export class KiroReviewer implements Reviewer {
 
         return rawOutput;
     }
+}
+
+function resolveReviewerCommand(command: string, baseDir: string): string {
+    if (!hasPathSeparator(command) || path.isAbsolute(command)) {
+        return command;
+    }
+
+    return path.resolve(baseDir, command);
+}
+
+function hasPathSeparator(command: string): boolean {
+    return command.includes("/") || command.includes("\\");
 }
 
 function reviewerEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -80,6 +103,10 @@ function buildPrompt(request: ReviewRequest): string {
         configuredInstructions !== undefined && configuredInstructions !== ""
             ? `\nAdditional instructions:\n${configuredInstructions}\n`
             : "";
+    const checkoutInstructions =
+        request.repositoryPath === undefined
+            ? ""
+            : `\nThe repository is checked out at the pull request head commit in your current working directory:\n${request.repositoryPath}\nUse it for extra context when the diff alone is insufficient.\n`;
 
     return `Review this pull request diff.
 
@@ -87,6 +114,7 @@ Repository: ${request.repositoryUrl}
 Pull request: #${request.pullRequest.number.toString()} ${request.pullRequest.title}
 Author: ${request.pullRequest.author}
 Head commit: ${request.pullRequest.headSha}
+${checkoutInstructions}
 ${additionalInstructions}
 
 Return only valid JSON with this exact shape and no surrounding text:
