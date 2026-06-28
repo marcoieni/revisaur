@@ -1,20 +1,13 @@
 ---
-import { tokenizeMarkdownSource } from "../runtime/markdownLinks.js";
+import { Code } from "astro:components";
 
 interface Props {
   source: string;
 }
 
 const { source } = Astro.props;
-const tokens = tokenizeMarkdownSource(source);
 ---
 
 <div class="markdown-source">
-  <pre><code>{
-    tokens.map((token) => token.kind === "link" ? (
-      <Fragment>
-        {"["}<a href={token.href} target="_blank" rel="noopener noreferrer">{token.label}</a>{`](${token.destination})`}
-      </Fragment>
-    ) : token.text)
-  }</code></pre>
+  <Code code={source} lang="markdown" theme="css-variables" wrap />
 </div>

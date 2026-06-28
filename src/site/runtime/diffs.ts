@@ -9,7 +9,6 @@ import {
 } from "@pierre/diffs";
 import { commentAddressedKey, loadAddressedState, setAddressedValue, type AddressedComment } from "./addressed.js";
 import { collapseChevronSvg } from "./icons.js";
-import { tokenizeMarkdownSource, type MarkdownLinkToken } from "./markdownLinks.js";
 
 const diffs: FileDiff<ReviewAnnotation>[] = [];
 const diffRenderState = new Map<
@@ -206,25 +205,10 @@ function renderMarkdownSource(container: HTMLElement, markdownSource: string, so
     const code = document.createElement("code");
     const wrapper = document.createElement("div");
     wrapper.className = "markdown-source";
-    for (const token of tokenizeMarkdownSource(markdownSource)) {
-        if (token.kind === "link") {
-            code.append("[", createMarkdownSourceLink(token), `](${token.destination})`);
-        } else {
-            code.append(token.text);
-        }
-    }
+    code.textContent = markdownSource;
     pre.append(code);
     wrapper.append(pre);
     container.append(wrapper);
-}
-
-function createMarkdownSourceLink(token: MarkdownLinkToken): HTMLAnchorElement {
-    const link = document.createElement("a");
-    link.href = token.href;
-    link.rel = "noopener noreferrer";
-    link.target = "_blank";
-    link.textContent = token.label;
-    return link;
 }
 
 function getRenderedMarkdownSource(sourceKey: string): DocumentFragment | undefined {
