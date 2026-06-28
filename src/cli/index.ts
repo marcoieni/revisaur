@@ -2,22 +2,22 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { ensureDir, writeJson } from "fs-extra/esm";
+import { copy, ensureDir, pathExists, writeJson } from "fs-extra/esm";
 import { execa } from "execa";
 import { loadConfig } from "../config/loadConfig.js";
 import { providerFor } from "../providers/index.js";
 import { cloneRepositoryCheckout, type ReviewCheckout } from "../repositories/checkout.js";
 import { reviewerFor } from "../reviewers/index.js";
-import { emptyState, isReusableReview, loadState, reviewKey, saveState } from "../state/reviewState.js";
+import { isReusableReview, loadReviewState, reviewKey, writeReviewApi, writeReviewFile } from "../state/reviewState.js";
 import type {
     PullRequestReview,
     RepositoryConfig,
     ReviewExecutionMetadata,
     ReviewerConfig,
     RevisaurConfig,
+    SiteData,
+    SiteRepository,
 } from "../types/revisaur.js";
-
-type SiteRepository = Pick<RepositoryConfig, "id" | "name" | "owner" | "provider" | "repo" | "url">;
 
 const program = new Command();
 const dataDirEnvKey = "REVISAUR_DATA_DIR";
@@ -65,18 +65,17 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
     const dataDir = path.resolve(workspace, config.dataDir);
     const outputDir = path.resolve(workspace, config.outputDir);
     await ensureDir(dataDir);
-    const statePath = path.join(dataDir, "state.json");
-    const state = await loadState(statePath);
+    const state = await loadReviewState(dataDir);
     const reviewer = reviewerFor(config.reviewer);
     const reviewerMetadata = reviewExecutionMetadata(config.reviewer);
-    // Tracks the current run's site payload while state.reviews remains the full cache.
+    // Tracks the current run's site payload while state.reviews remains the full committed review store.
     const reviewKeys: string[] = [];
     let cachedReviews = 0;
     let completedReviews = 0;
     let failedReviews = 0;
 
     console.log(
-        `${logIcon.cache} Loaded review cache from ${statePath} with ${Object.keys(state.reviews).length.toString()} entries.`,
+        `${logIcon.cache} Loaded review data from ${dataDir} with ${Object.keys(state.reviews).length.toString()} entries.`,
     );
 
     for (const repo of config.repositories) {
@@ -150,6 +149,7 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
                         comments: result.comments,
                     };
                     state.reviews[key] = review;
+                    await writeReviewFile(dataDir, review);
                     completedReviews += 1;
                     console.log(
                         `${logIcon.complete} Review completed for ${label} with ${result.comments.length.toString()} comments.`,
@@ -169,11 +169,10 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
                         error: error instanceof Error ? error.message : String(error),
                     };
                     state.reviews[key] = review;
+                    await writeReviewFile(dataDir, review);
                     failedReviews += 1;
                     console.log(`${logIcon.error} Review failed for ${label}: ${review.error ?? "Unknown error"}`);
                 }
-
-                await saveState(statePath, state);
             }
         } finally {
             await checkout?.dispose();
@@ -184,9 +183,9 @@ async function generate(config: RevisaurConfig, skipBuild: boolean, workspace: s
         dataDir,
         config.repositories,
         reviewKeys.map((key) => state.reviews[key]).filter((review): review is PullRequestReview => Boolean(review)),
+        Object.values(state.reviews),
     );
 
-    await saveState(statePath, state);
     console.log(
         `${logIcon.complete} Review run complete: ${cachedReviews.toString()} cached, ${completedReviews.toString()} reviewed, ${failedReviews.toString()} failed.`,
     );
@@ -216,14 +215,8 @@ async function demo(
 
     const repositories = demoRepositories();
     const reviews = demoReviews();
-    const state = emptyState();
-
-    for (const review of reviews) {
-        state.reviews[reviewKey(review.pullRequest)] = review;
-    }
 
     await writeSiteData(dataDir, repositories, reviews);
-    await saveState(path.join(dataDir, "state.json"), state);
 
     if (!skipBuild) {
         await buildSite(dataDirOption, outputDir, workspace);
@@ -242,26 +235,39 @@ async function buildSite(dataDir: string, outputDir: string, workspace: string):
             [workspaceEnvKey]: workspace,
         },
     });
+    await copyReviewApiToOutput(dataDir, outputDir, workspace);
 }
 
 async function writeSiteData(
     dataDir: string,
     repositories: SiteRepository[],
     reviews: PullRequestReview[],
+    storedReviews = reviews,
 ): Promise<void> {
-    await writeJson(
-        path.join(dataDir, "site.json"),
-        {
-            generatedAt: new Date().toISOString(),
-            repositories: repositories.map(siteRepository),
-            reviews,
-        },
-        { spaces: 2 },
-    );
+    const generatedAt = new Date().toISOString();
+    const siteRepositories = repositories.map(siteRepository);
+    const siteData: SiteData = {
+        generatedAt,
+        repositories: siteRepositories,
+        reviews,
+    };
+
+    await writeJson(path.join(dataDir, "site.json"), siteData, { spaces: 2 });
+    await writeReviewApi(dataDir, siteRepositories, storedReviews, generatedAt);
 }
 
 function siteRepository({ id, name, provider, url, owner, repo }: SiteRepository): SiteRepository {
     return { id, name, provider, url, owner, repo };
+}
+
+async function copyReviewApiToOutput(dataDir: string, outputDir: string, workspace: string): Promise<void> {
+    const source = path.resolve(workspace, dataDir, "reviews");
+
+    if (!(await pathExists(source))) {
+        return;
+    }
+
+    await copy(source, path.join(outputDir, "api", "reviews"), { overwrite: true });
 }
 
 function resolvePackageRoot(): string {

@@ -86,3 +86,32 @@ export interface ReviewState {
     version: 1;
     reviews: Record<string, PullRequestReview>;
 }
+
+export type SiteRepository = Pick<RepositoryConfig, "id" | "name" | "owner" | "provider" | "repo" | "url">;
+
+export interface SiteData {
+    generatedAt: string;
+    repositories: SiteRepository[];
+    reviews: PullRequestReview[];
+}
+
+export interface ReviewManifest {
+    version: 1;
+    generatedAt: string;
+    repositories: SiteRepository[];
+    reviews: ReviewManifestEntry[];
+}
+
+export interface ReviewManifestEntry {
+    author: string;
+    headSha: string;
+    number: number;
+    path: string;
+    provider: ProviderKind;
+    repoId: string;
+    reviewedAt: string;
+    status: ReviewStatus;
+    title: string;
+    updatedAt: string;
+    url: string;
+}

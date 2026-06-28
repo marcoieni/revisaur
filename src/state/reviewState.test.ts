@@ -1,9 +1,26 @@
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { readJson } from "fs-extra/esm";
 import { describe, expect, it } from "vitest";
-import { emptyState, isReusableReview, loadState, reviewKey, saveState } from "./reviewState.js";
-import type { PullRequestReview, PullRequestSummary, ReviewState } from "../types/revisaur.js";
+import {
+    emptyState,
+    isReusableReview,
+    loadReviewState,
+    loadState,
+    reviewJsonRelativePath,
+    reviewKey,
+    saveState,
+    writeReviewApi,
+    writeReviewFile,
+} from "./reviewState.js";
+import type {
+    PullRequestReview,
+    PullRequestSummary,
+    ReviewManifest,
+    ReviewState,
+    SiteRepository,
+} from "../types/revisaur.js";
 
 describe("reviewState", () => {
     it("creates an empty versioned state", () => {
@@ -51,7 +68,66 @@ describe("reviewState", () => {
         expect(isReusableReview(review({ status: "failed" }))).toBe(false);
         expect(isReusableReview(undefined)).toBe(false);
     });
+
+    it("writes review JSON files and an API manifest", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "revisaur-state-"));
+        const generatedAt = "2026-01-01T00:00:00.000Z";
+        const item = review();
+
+        await writeReviewApi(dir, [repository()], [item], generatedAt);
+
+        await expect(readJson(join(dir, ...reviewJsonRelativePath(item).split("/")))).resolves.toEqual(item);
+        await expect(readJson(join(dir, "reviews", "index.json")) as Promise<ReviewManifest>).resolves.toMatchObject({
+            version: 1,
+            generatedAt,
+            repositories: [repository()],
+            reviews: [
+                {
+                    author: "alice",
+                    headSha: "abc",
+                    number: 7,
+                    path: "repo/7/abc.json",
+                    provider: "github",
+                    repoId: "repo",
+                    reviewedAt: "2026-01-01T00:00:00.000Z",
+                    status: "reviewed",
+                    title: "Update dependency",
+                    updatedAt: "2026-01-01T00:00:00.000Z",
+                    url: "https://github.com/example/repo/pull/7",
+                },
+            ],
+        });
+    });
+
+    it("loads review state from committed review files and legacy state JSON", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "revisaur-state-"));
+        const legacyReview = review({ summary: "Legacy cache entry." });
+        const fileReview = review({ summary: "Committed review file." });
+
+        await saveState(join(dir, "state.json"), {
+            version: 1,
+            reviews: { [reviewKey(legacyReview.pullRequest)]: legacyReview },
+        });
+        await writeReviewFile(dir, fileReview);
+
+        await expect(loadReviewState(dir)).resolves.toEqual({
+            version: 1,
+            reviews: { [reviewKey(fileReview.pullRequest)]: fileReview },
+        });
+    });
 });
+
+function repository(overrides: Partial<SiteRepository> = {}): SiteRepository {
+    return {
+        id: "repo",
+        name: "example/repo",
+        owner: "example",
+        provider: "github",
+        repo: "repo",
+        url: "https://github.com/example/repo",
+        ...overrides,
+    };
+}
 
 function pullRequest(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     return {
