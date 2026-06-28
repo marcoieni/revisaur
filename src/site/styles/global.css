@@ -865,13 +865,6 @@ h1 {
     min-width: 0;
 }
 
-.markdown-source a {
-    color: var(--astro-code-token-link);
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
-}
-
 .review-collapse-toggle,
 .diff-collapse-toggle,
 .copy-location-button {

@@ -377,7 +377,7 @@ index c112243..2d7e401 100644
                     line: 5,
                     side: "right",
                     severity: "critical",
-                    body: "**Security:** this key only includes `projectId`, so a restricted viewer can receive a summary cached for an owner.\n\nInclude `viewerRole` or a permission scope in the key before storing the response. See [OWASP access control](https://owasp.org/www-community/Access_Control) for the expected partitioning shape.",
+                    body: "**Security:** this key only includes `projectId`, so a restricted viewer can receive a summary cached for an owner.\n\nInclude `viewerRole` or a permission scope in the key before storing the response.",
                 },
                 {
                     path: "src/activity/cache.ts",
