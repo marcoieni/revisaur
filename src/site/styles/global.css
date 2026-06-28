@@ -872,6 +872,20 @@ h1 {
     text-underline-offset: 2px;
 }
 
+.markdown-source-strong {
+    color: var(--astro-code-token-keyword);
+    font-weight: 700;
+}
+
+.markdown-source-emphasis {
+    color: var(--astro-code-token-parameter);
+    font-style: italic;
+}
+
+.markdown-source-code {
+    color: var(--astro-code-token-string);
+}
+
 .review-collapse-toggle,
 .diff-collapse-toggle,
 .copy-location-button {

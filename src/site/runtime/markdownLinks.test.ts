@@ -31,6 +31,39 @@ describe("tokenizeMarkdownSource", () => {
             },
         ]);
     });
+
+    it("marks bold markdown source while keeping delimiters copyable", () => {
+        expect(tokenizeMarkdownSource("**Cache key issue found:** merge safely.")).toEqual([
+            { kind: "text", strong: true, text: "**Cache key issue found:**" },
+            { kind: "text", text: " merge safely." },
+        ]);
+    });
+
+    it("marks emphasis without treating identifier underscores as markdown", () => {
+        expect(tokenizeMarkdownSource("new_cache is _useful_ for the *current key*.")).toEqual([
+            { kind: "text", text: "new_cache is " },
+            { emphasis: true, kind: "text", text: "_useful_" },
+            { kind: "text", text: " for the " },
+            { emphasis: true, kind: "text", text: "*current key*" },
+            { kind: "text", text: "." },
+        ]);
+    });
+
+    it("applies source styles to markdown links inside emphasis", () => {
+        expect(tokenizeMarkdownSource("See **[docs](https://example.com/docs)**.")).toEqual([
+            { kind: "text", text: "See " },
+            { kind: "text", strong: true, text: "**" },
+            {
+                destination: "https://example.com/docs",
+                href: "https://example.com/docs",
+                kind: "link",
+                label: "docs",
+                strong: true,
+            },
+            { kind: "text", strong: true, text: "**" },
+            { kind: "text", text: "." },
+        ]);
+    });
 });
 
 describe("markdownDestinationHref", () => {

@@ -9,7 +9,12 @@ import {
 } from "@pierre/diffs";
 import { commentAddressedKey, loadAddressedState, setAddressedValue, type AddressedComment } from "./addressed.js";
 import { collapseChevronSvg } from "./icons.js";
-import { tokenizeMarkdownSource, type MarkdownLinkToken } from "./markdownLinks.js";
+import {
+    markdownSourceTokenClassNames,
+    tokenizeMarkdownSource,
+    type MarkdownLinkToken,
+    type MarkdownSourceToken,
+} from "./markdownLinks.js";
 
 const diffs: FileDiff<ReviewAnnotation>[] = [];
 const diffRenderState = new Map<
@@ -207,15 +212,32 @@ function renderMarkdownSource(container: HTMLElement, markdownSource: string, so
     const wrapper = document.createElement("div");
     wrapper.className = "markdown-source";
     for (const token of tokenizeMarkdownSource(markdownSource)) {
-        if (token.kind === "link") {
-            code.append("[", createMarkdownSourceLink(token), `](${token.destination})`);
-        } else {
-            code.append(token.text);
-        }
+        appendMarkdownSourceToken(code, token);
     }
     pre.append(code);
     wrapper.append(pre);
     container.append(wrapper);
+}
+
+function appendMarkdownSourceToken(container: HTMLElement, token: MarkdownSourceToken): void {
+    const classNames = markdownSourceTokenClassNames(token);
+    if (classNames.length === 0) {
+        appendMarkdownSourceTokenContent(container, token);
+        return;
+    }
+
+    const wrapper = document.createElement("span");
+    wrapper.classList.add(...classNames);
+    appendMarkdownSourceTokenContent(wrapper, token);
+    container.append(wrapper);
+}
+
+function appendMarkdownSourceTokenContent(container: HTMLElement, token: MarkdownSourceToken): void {
+    if (token.kind === "link") {
+        container.append("[", createMarkdownSourceLink(token), `](${token.destination})`);
+    } else {
+        container.append(token.text);
+    }
 }
 
 function createMarkdownSourceLink(token: MarkdownLinkToken): HTMLAnchorElement {

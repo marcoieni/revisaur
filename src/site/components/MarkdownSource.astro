@@ -1,5 +1,9 @@
 ---
-import { tokenizeMarkdownSource } from "../runtime/markdownLinks.js";
+import {
+  markdownSourceTokenClassNames,
+  tokenizeMarkdownSource,
+  type MarkdownSourceToken,
+} from "../runtime/markdownLinks.js";
 
 interface Props {
   source: string;
@@ -7,14 +11,32 @@ interface Props {
 
 const { source } = Astro.props;
 const tokens = tokenizeMarkdownSource(source);
+const html = tokens.map(renderMarkdownSourceToken).join("");
+
+function renderMarkdownSourceToken(token: MarkdownSourceToken): string {
+  const className = markdownSourceTokenClass(token);
+  const content =
+    token.kind === "link"
+      ? `[<a href="${escapeAttribute(token.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(token.label)}</a>](${escapeHtml(token.destination)})`
+      : escapeHtml(token.text);
+
+  return className === undefined ? content : `<span class="${escapeAttribute(className)}">${content}</span>`;
+}
+
+function markdownSourceTokenClass(token: MarkdownSourceToken): string | undefined {
+  const className = markdownSourceTokenClassNames(token).join(" ");
+  return className.length > 0 ? className : undefined;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replaceAll('"', "&quot;");
+}
 ---
 
 <div class="markdown-source">
-  <pre><code>{
-    tokens.map((token) => token.kind === "link" ? (
-      <Fragment>
-        {"["}<a href={token.href} target="_blank" rel="noopener noreferrer">{token.label}</a>{`](${token.destination})`}
-      </Fragment>
-    ) : token.text)
-  }</code></pre>
+  <pre><code><Fragment set:html={html} /></code></pre>
 </div>
