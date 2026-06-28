@@ -91,6 +91,85 @@ a {
     min-width: max-content;
 }
 
+.review-search {
+    position: relative;
+    flex: 0 1 280px;
+    min-width: 220px;
+}
+
+.review-search input {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #bdb4a4;
+    border-radius: 6px;
+    box-sizing: border-box;
+    padding: 0 38px 0 14px;
+    font: inherit;
+    font-weight: 600;
+    appearance: none;
+    background: #ffffff;
+    color: #171717;
+}
+
+.review-search input::-webkit-search-decoration,
+.review-search input::-webkit-search-cancel-button {
+    appearance: none;
+}
+
+.review-search input:focus {
+    border-color: #075e54;
+    outline: 3px solid #d8eee7;
+}
+
+.review-search-clear {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    appearance: none;
+    background: transparent;
+    color: #5d5968;
+    cursor: pointer;
+    transform: translateY(-50%);
+}
+
+.review-search-clear[hidden] {
+    display: none;
+}
+
+.review-search-clear::before,
+.review-search-clear::after {
+    position: absolute;
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    content: "";
+}
+
+.review-search-clear::before {
+    transform: rotate(45deg);
+}
+
+.review-search-clear::after {
+    transform: rotate(-45deg);
+}
+
+.review-search-clear:hover {
+    background: rgba(93, 89, 104, 0.12);
+    color: #171717;
+}
+
+.review-search-clear:focus-visible {
+    outline: 3px solid #d8eee7;
+    outline-offset: 1px;
+}
+
 @media (min-width: 1280px) {
     .topbar {
         display: grid;
@@ -101,7 +180,7 @@ a {
     .topbar-controls {
         display: grid;
         flex: 0 1 auto;
-        grid-template-columns: repeat(3, max-content) max-content;
+        grid-template-columns: repeat(3, max-content) minmax(0, max-content);
         justify-content: end;
     }
 }
@@ -564,6 +643,18 @@ h1 {
     color: #666052;
 }
 
+.empty-state {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding: 0 32px 48px;
+    color: #666052;
+    font-weight: 700;
+}
+
+.empty-state[hidden] {
+    display: none;
+}
+
 .privacy-notice h2 {
     margin: 0 0 6px;
     color: #171717;
@@ -972,6 +1063,7 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
 :root[data-theme="dark"] .theme-selector,
 :root[data-theme="dark"] .diff-overflow-selector,
 :root[data-theme="dark"] .diff-layout-selector,
+:root[data-theme="dark"] .review-search input,
 :root[data-theme="dark"] .filter-picker input,
 :root[data-theme="dark"] .filter-options {
     border-color: #525a64;
@@ -995,6 +1087,8 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
 :root[data-theme="dark"] .theme-selector input:focus-visible + .theme-option,
 :root[data-theme="dark"] .diff-overflow-selector input:focus-visible + span,
 :root[data-theme="dark"] .diff-layout-selector input:focus-visible + span,
+:root[data-theme="dark"] .review-search input:focus,
+:root[data-theme="dark"] .review-search-clear:focus-visible,
 :root[data-theme="dark"] .filter-picker input:focus {
     outline-color: rgba(91, 208, 178, 0.28);
 }
@@ -1016,8 +1110,18 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
     color: #5bd0b2;
 }
 
+:root[data-theme="dark"] .review-search input:focus,
 :root[data-theme="dark"] .filter-picker input:focus {
     border-color: #5bd0b2;
+}
+
+:root[data-theme="dark"] .review-search-clear {
+    color: #b7b0a4;
+}
+
+:root[data-theme="dark"] .review-search-clear:hover {
+    background: rgba(201, 195, 184, 0.12);
+    color: #f3f0e8;
 }
 
 :root[data-theme="dark"] .filter-options-header,
@@ -1063,7 +1167,8 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
     color: #5bd0b2;
 }
 
-:root[data-theme="dark"] .privacy-notice {
+:root[data-theme="dark"] .privacy-notice,
+:root[data-theme="dark"] .empty-state {
     color: #b7b0a4;
 }
 
@@ -1192,14 +1297,20 @@ diffs-container[data-collapsed] .diff-collapse-toggle svg {
     }
 
     .filter-controls {
+        width: max-content;
         gap: 12px;
     }
 
     .topbar,
     .reviews,
+    .empty-state,
     .privacy-notice {
         padding-left: 16px;
         padding-right: 16px;
+    }
+
+    .review-search {
+        flex-basis: 240px;
     }
 
     .filter-picker {
