@@ -334,7 +334,7 @@ function demoReviews(): PullRequestReview[] {
             reviewedCommit: "9f3b7c2d8a1e4f52b6c901df774aa018e8db7210",
             reviewedAt: new Date(now - 16 * 60 * 60 * 1000).toISOString(),
             summary:
-                "**Cache key issue found:** the new_cache layer is a _useful_ performance win, but the *current key* omits `viewerRole` and can leak activity totals across permission scopes.\n\nRecommended follow-up:\n- Partition the cache by viewer role or permission scope.\n- Add coverage for **owner-to-viewer** cache reuse.\n\nSee `getActivitySummary` before merging.",
+                "**Cache key issue found:** the new_cache layer is a _useful_ performance win, but the *current key* omits `viewerRole` and can leak activity totals across permission scopes.\n\nRecommended follow-up:\n- Partition the cache by viewer role or permission scope.\n- Add coverage for **owner-to-viewer** cache reuse.\n\nSee `getActivitySummary` before merging.\n\n```rust\nlet a = \"block code test\"; // **this shouldn't be highlighted**\n```",
             rawOutput:
                 "Found one high-impact cache key issue and one lower-risk invalidation gap around archived projects.",
             diff: `diff --git a/src/activity/cache.ts b/src/activity/cache.ts
