@@ -7,7 +7,7 @@
 > [!NOTE]
 > This is still in early development. Come back after I announce this project publicly.
 
-Revisaur reads a TOML configuration file, fetches the last N recently updated pull requests for each configured repository, runs an AI review for PR head commits that have not been reviewed yet, and generates a static Astro website.
+Revisaur reads a TOML configuration file, fetches the last N recently updated pull requests for each configured repository, runs an AI review for PR head commits that have not been reviewed yet, and generates a static Astro website with a JSON review API.
 
 The first provider is GitHub. The provider interface is intentionally isolated so GitLab and Forgejo can be added later. The first reviewer is Kiro CLI headless mode, with the reviewer interface ready for other tools such as Codex.
 
@@ -101,10 +101,25 @@ Global and repository-level user filters (`included_authors`, `included_assignee
 
 Use `prompt_instructions` to add reviewer guidance to the generated prompt. A repository-level value overrides the global value for that repository.
 
-Revisaur stores review state in `.revisaur/data/state.json`. A PR commit is reviewed once per repository, PR number, and head SHA. If a PR receives new commits, the changed head SHA causes a new review. Existing reviews are reused when rebuilding the website.
+Revisaur stores reusable review JSON files in `.revisaur/data/reviews/`. A PR commit is reviewed once per repository, PR number, and head SHA. If a PR receives new commits, the changed head SHA causes a new review. Existing review files are reused when rebuilding the website.
 
 When Revisaur needs to run a review, it creates one temporary shallow checkout for that repository, switches it to each pull request head commit being reviewed, and runs the reviewer from that directory.
-After finishing that repository's reviews, Revisaur removes the temporary checkout so that it is not included in the review state cache.
+After finishing that repository's reviews, Revisaur removes the temporary checkout so that only the generated review data remains.
+
+## Review JSON API
+
+Each review is written as a standalone JSON file at `.revisaur/data/reviews/<repo-id>/<pr-number>/<head-sha>.json`. The manifest at `.revisaur/data/reviews/index.json` lists all known review files and their metadata. Commit `.revisaur/data/reviews/` to the repository that runs Revisaur so later runs can reuse the review files already present in the checkout.
+
+When the site is built, Revisaur copies the same API to `site-dist/api/reviews/`. For example, a published site can expose `/api/reviews/index.json` plus the per-review paths listed in that manifest.
+
+You can inspect the committed files with `jq`:
+
+```bash
+jq -r '.reviews[] | "\(.repoId) #\(.number) \(.status) \(.path)"' .revisaur/data/reviews/index.json
+
+review_path=$(jq -r '.reviews[0].path' .revisaur/data/reviews/index.json)
+jq -r '.comments[] | select(.severity == "critical") | "\(.path):\(.line) \(.body)"' ".revisaur/data/reviews/$review_path"
+```
 
 ## GitHub Pages
 

@@ -30,13 +30,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: read
     steps:
       - uses: actions/checkout@v6
       - uses: marcoieni/revisaur/action@main
         env:
           KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
+      - name: Commit review JSON API
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .revisaur/data/reviews
+          git diff --cached --quiet && exit 0
+          git commit -m "Update Revisaur review data"
+          git push
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site-dist
@@ -55,10 +64,16 @@ jobs:
         uses: actions/deploy-pages@v5
 ```
 
-The build job is the only job that runs the AI reviewer, so it gets read-only repository permissions and the Kiro API key. The deploy job gets the Pages/OIDC permissions, but it only publishes the generated artifact and does not run the reviewer.
+The build job is the only job that runs the AI reviewer, so it gets repository write permission to commit review JSON files plus read-only pull request access and the Kiro API key. The deploy job gets the Pages/OIDC permissions, but it only publishes the generated artifact and does not run the reviewer.
 
-By default the action caches `.revisaur/data`, matching the default `data_dir`. If your `revisaur.toml` uses a different `data_dir`, pass the same path as `cache-path` to the action.
+By default Revisaur writes committed review files to `.revisaur/data/reviews`, matching the default `data_dir`. If your `revisaur.toml` uses a different `data_dir`, commit that directory's `reviews` subdirectory instead. If your repository ignores `.revisaur/`, add an exception for `.revisaur/data/reviews/`.
 
-Uncached reviews use temporary shallow git checkouts so the AI reviewer can inspect repository files. Each repository is cloned at most once per run, outside `data_dir`, and the checkout is removed after that repository's reviews finish, so the action cache stores only review state.
+Reviews not already present in the checkout use temporary shallow git checkouts so the AI reviewer can inspect repository files. Each repository is cloned at most once per run, outside `data_dir`, and the checkout is removed after that repository's reviews finish.
+
+The generated site also exposes the committed review data as a static API under `site-dist/api/reviews/`. For example:
+
+```bash
+jq -r '.reviews[] | "\(.repoId) #\(.number) \(.status) \(.path)"' .revisaur/data/reviews/index.json
+```
 
 For now the provider implementation supports GitHub repository URLs. The config keeps an explicit `provider` field so GitLab and Forgejo providers can be added without changing the file shape.
